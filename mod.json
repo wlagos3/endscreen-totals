@@ -1,0 +1,14 @@
+{
+	"geode": "4.2.0",
+	"gd": {
+		"win": "2.2074",
+		"android": "2.2074",
+		"mac": "2.2074",
+		"ios": "2.2074"
+	},
+	"id": "zsa.endscreen-totals",
+	"name": "Endscreen Totals",
+	"version": "v1.0.0-beta.1",
+	"developer": "ZSA",
+	"description": ""
+}
