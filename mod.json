@@ -1,14 +1,49 @@
 {
-	"geode": "4.2.0",
+	"geode": "5.6.1",
 	"gd": {
-		"win": "2.2074",
-		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
 	},
 	"id": "zsa.endscreen-totals",
 	"name": "Endscreen Totals",
-	"version": "v1.0.0-beta.1",
-	"developer": "ZSA",
-	"description": ""
+	"version": "v1.0.0",
+	"developers": ["ZSA", "Arlind-dev"],
+	"description": "Shows your total lifetime attempts on the endscreen",
+	"tags": ["enhancement", "utility", "offline"],
+	"dependencies": {
+		"geode.node-ids": ">=v1.23.0",
+		"cvolton.level-id-api": ">=v2.0.0",
+		"elohmrow.death_tracker": {
+			"version": ">=v3.0.4",
+			"required": false
+		}
+	},
+	"settings": {
+		"show-practice": {
+			"type": "bool",
+			"name": "Show in Practice Mode",
+			"description": "Show totals on the practice mode endscreen",
+			"default": false
+		},
+		"ignore-dt-links": {
+			"type": "bool",
+			"name": "Ignore Death Tracker Links",
+			"description": "Don't inherit linked levels from Death Tracker. Only counts the current level's attempts and jumps.",
+			"default": false
+		},
+		"from-zero-only": {
+			"type": "bool",
+			"name": "From 0% Only",
+			"description": "Only show the label when playing from the beginning, not from a start position.",
+			"default": false
+		},
+		"show-jumps": {
+			"type": "bool",
+			"name": "Show Total Jumps",
+			"description": "Also show a Total Jumps label.\n\n<cr>Note:</c> Jump counts can only be read from GD's in-memory level cache. Linked levels that haven't been loaded this session won't be counted, so the total may be lower than reality.",
+			"default": false
+		}
+	}
 }
