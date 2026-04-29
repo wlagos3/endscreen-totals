@@ -134,25 +134,75 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
         bool showJumps = Mod::get()->getSettingValue<bool>("show-jumps");
         auto [totalAtt, totalJumps] = getTotals(level);
 
+        // Bottom-left: this level's own stats
+        auto container = CCNode::create();
+        container->setID("totals-container"_spr);
+        container->setAnchorPoint({0.f, 0.f});
+        container->setPosition({4.f, 4.f});
+        container->setContentSize({160.f, 50.f});
+        auto blLayout = ColumnLayout::create();
+        blLayout->setAxisReverse(true);
+        blLayout->setAxisAlignment(AxisAlignment::Start);
+        blLayout->setCrossAxisAlignment(AxisAlignment::Start);
+        blLayout->setCrossAxisLineAlignment(AxisAlignment::Start);
+        blLayout->setAutoScale(false);
+        blLayout->setGap(2.f);
+        container->setLayout(blLayout);
+
+        auto makeBlLabel = [](const std::string& text) {
+            auto lbl = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
+            lbl->setScale(0.3f);
+            return lbl;
+        };
+
+        auto blAtt = makeBlLabel(fmt::format("Attempts: {}", formatCommas(level->m_attempts)));
+        blAtt->setID("attempts-label"_spr);
+        container->addChild(blAtt);
+
+        if (showJumps) {
+            auto blJumps = makeBlLabel(fmt::format("Jumps: {}", formatCommas(level->m_jumps)));
+            blJumps->setID("jumps-label"_spr);
+            container->addChild(blJumps);
+        }
+
+        container->updateLayout();
+        m_mainLayer->addChild(container);
+
+        // Summary-container: totals across linked levels
         auto summary = m_mainLayer->getChildByID("summary-container");
         if (!summary) return;
 
-        auto makeLabel = [](const std::string& text) {
+        auto summaryWrapper = CCNode::create();
+        summaryWrapper->setID("totals-summary"_spr);
+        summaryWrapper->setAnchorPoint({0.5f, 0.5f});
+        summaryWrapper->setContentSize({160.f, 50.f});
+        auto summaryLayout = ColumnLayout::create();
+        summaryLayout->setAxisReverse(true);
+        summaryLayout->setAxisAlignment(AxisAlignment::Start);
+        summaryLayout->setCrossAxisAlignment(AxisAlignment::Start);
+        summaryLayout->setCrossAxisLineAlignment(AxisAlignment::Start);
+        summaryLayout->setAutoScale(false);
+        summaryLayout->setGap(2.f);
+        summaryWrapper->setLayout(summaryLayout);
+
+        auto makeSummaryLabel = [](const std::string& text) {
             auto lbl = CCLabelBMFont::create(text.c_str(), "goldFont.fnt");
             lbl->setScale(0.3f);
             return lbl;
         };
 
-        auto attLabel = makeLabel(fmt::format("Attempts: {}", formatCommas(totalAtt)));
-        attLabel->setID("total-attempts-label"_spr);
-        summary->addChild(attLabel);
+        auto totalAttLabel = makeSummaryLabel(fmt::format("Total Attempts: {}", formatCommas(totalAtt)));
+        totalAttLabel->setID("total-attempts-label"_spr);
+        summaryWrapper->addChild(totalAttLabel);
 
         if (showJumps) {
-            auto jumpsLabel = makeLabel(fmt::format("Jumps: {}", formatCommas(totalJumps)));
-            jumpsLabel->setID("total-jumps-label"_spr);
-            summary->addChild(jumpsLabel);
+            auto totalJumpsLabel = makeSummaryLabel(fmt::format("Total Jumps: {}", formatCommas(totalJumps)));
+            totalJumpsLabel->setID("total-jumps-label"_spr);
+            summaryWrapper->addChild(totalJumpsLabel);
         }
 
+        summaryWrapper->updateLayout();
+        summary->addChild(summaryWrapper);
         summary->updateLayout();
     }
 };
