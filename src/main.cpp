@@ -134,40 +134,6 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
         bool showJumps = Mod::get()->getSettingValue<bool>("show-jumps");
         auto [totalAtt, totalJumps] = getTotals(level);
 
-        // Bottom-left: this level's own stats
-        auto container = CCNode::create();
-        container->setID("totals-container"_spr);
-        container->setAnchorPoint({0.f, 0.f});
-        container->setPosition({4.f, 4.f});
-        container->setContentSize({160.f, 50.f});
-        auto blLayout = ColumnLayout::create();
-        blLayout->setAxisReverse(true);
-        blLayout->setAxisAlignment(AxisAlignment::Start);
-        blLayout->setCrossAxisAlignment(AxisAlignment::Start);
-        blLayout->setCrossAxisLineAlignment(AxisAlignment::Start);
-        blLayout->setAutoScale(false);
-        blLayout->setGap(2.f);
-        container->setLayout(blLayout);
-
-        auto makeBlLabel = [](const std::string& text) {
-            auto lbl = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
-            lbl->setScale(0.3f);
-            return lbl;
-        };
-
-        auto blAtt = makeBlLabel(fmt::format("Attempts: {}", formatCommas(level->m_attempts)));
-        blAtt->setID("attempts-label"_spr);
-        container->addChild(blAtt);
-
-        if (showJumps) {
-            auto blJumps = makeBlLabel(fmt::format("Jumps: {}", formatCommas(level->m_jumps)));
-            blJumps->setID("jumps-label"_spr);
-            container->addChild(blJumps);
-        }
-
-        container->updateLayout();
-        m_mainLayer->addChild(container);
-
         // Summary-container: totals across linked levels
         auto summary = m_mainLayer->getChildByID("summary-container");
         if (!summary) return;
