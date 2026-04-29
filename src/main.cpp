@@ -153,7 +153,7 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
 
         auto makeSummaryLabel = [](const std::string& text) {
             auto lbl = CCLabelBMFont::create(text.c_str(), "goldFont.fnt");
-            lbl->setScale(0.3f);
+            lbl->setScale(0.8f);
             return lbl;
         };
 
