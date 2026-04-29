@@ -8,13 +8,19 @@
 	},
 	"id": "zsa.endscreen-totals",
 	"name": "Endscreen Totals",
-	"version": "v1.0.0",
+	"version": "v1.0.0-beta.1",
 	"developers": ["ZSA", "Arlind-dev"],
 	"description": "Shows your total lifetime attempts on the endscreen",
 	"tags": ["enhancement", "utility", "offline"],
 	"dependencies": {
-		"geode.node-ids": ">=v1.23.0",
-		"cvolton.level-id-api": ">=v2.0.0",
+		"geode.node-ids": {
+			"version": ">=v1.23.0",
+			"required": false
+		},
+		"cvolton.level-id-api": {
+			"version": ">=v2.0.0",
+			"required": false
+		},
 		"elohmrow.death_tracker": {
 			"version": ">=v3.0.4",
 			"required": false
