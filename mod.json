@@ -10,8 +10,7 @@
 	"name": "Endscreen Totals",
 	"version": "v1.0.0-beta.1",
 	"developers": ["ZSA", "Arlind-dev"],
-	"description": "Shows your total lifetime attempts on the endscreen",
-	"tags": ["enhancement", "utility", "offline"],
+	"description": "Shows your total attempts on the endscreen",
 	"dependencies": {
 		"geode.node-ids": {
 			"version": ">=v1.23.0",
@@ -48,7 +47,7 @@
 		"show-jumps": {
 			"type": "bool",
 			"name": "Show Total Jumps",
-			"description": "Also show a Total Jumps label.\n\n<cr>Note:</c> Jump counts can only be read from GD's in-memory level cache. Linked levels that haven't been loaded this session won't be counted, so the total may be lower than reality.",
+			"description": "Also show a Total Jumps label.\n\n<cr>Note:</c> Total jumps for the current level only.",
 			"default": false
 		}
 	}
