@@ -49,6 +49,34 @@ static std::optional<matjson::Value> readDTMeta(
     return res.isOk() ? std::optional(res.unwrap()) : std::nullopt;
 }
 
+
+static uint64_t readDTPlaytimeNs(
+    const std::filesystem::path& base,
+    const std::string& key
+) {
+    auto res = file::readJson(base / key / "general.dt");
+    if (res.isErr()) return 0;
+
+    auto general    = res.unwrap()["playtimeGeneral"];
+    uint64_t fromZero = static_cast<uint64_t>(general["playtimeF0"].asInt().unwrapOr(0));
+    uint64_t fromRuns = static_cast<uint64_t>(general["playtimeRuns"].asInt().unwrapOr(0));
+    return fromZero + fromRuns;
+}
+
+
+static std::string formatTime(uint64_t nanoseconds) {
+    uint64_t totalSeconds = nanoseconds / 1'000'000'000ULL;
+    uint64_t hours   = totalSeconds / 3600;
+    uint64_t minutes = (totalSeconds % 3600) / 60;
+    uint64_t seconds = totalSeconds % 60;
+
+    std::string out;
+    if (hours > 0)   out += fmt::format("{}h ", hours);
+    if (minutes > 0) out += fmt::format("{}m ", minutes);
+    out += fmt::format("{}s", seconds);
+    return out;
+}
+
 static std::set<std::string> getLinkedLevels(
     const std::string& key,
     const std::optional<std::filesystem::path>& dtBase
@@ -92,25 +120,35 @@ static GJGameLevel* findLevelInCache(const std::string& key) {
     );
 }
 
-static std::pair<int, int> getTotals(GJGameLevel* level) {
+struct Totals {
+    int totalAtt;
+    int totalJumps;
+    std::optional<uint64_t> totalTimeNs;
+};
+
+static Totals getTotals(GJGameLevel* level) {
     int totalAtt   = level->m_attempts;
     int totalJumps = level->m_jumps;
 
     auto dtBase = dtLevelSaveBase();
 
-    for (const auto& lk : getLinkedLevels(getLevelKey(level), dtBase)) {
+    auto key = getLevelKey(level);
+    std::optional<uint64_t> totalTimeNs;
+    if (dtBase) totalTimeNs = readDTPlaytimeNs(*dtBase, key);
+
+    for (const auto& lk : getLinkedLevels(key, dtBase)) {
         if (auto cached = findLevelInCache(lk)) {
             totalAtt   += cached->m_attempts;
             totalJumps += cached->m_jumps;
-            continue;
-        }
-        if (dtBase) {
+        } else if (dtBase) {
             if (auto meta = readDTMeta(*dtBase, lk))
                 totalAtt += (*meta)["attempts"].asInt().unwrapOr(0);
         }
+        if (totalTimeNs && lk != key)
+            *totalTimeNs += readDTPlaytimeNs(*dtBase, lk);
     }
 
-    return {totalAtt, totalJumps};
+    return {totalAtt, totalJumps, totalTimeNs};
 }
 
 class $modify(MyEndLevelLayer, EndLevelLayer) {
@@ -132,9 +170,9 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
         if (level->isPlatformer()) return;
 
         bool showJumps = Mod::get()->getSettingValue<bool>("show-jumps");
-        auto [totalAtt, totalJumps] = getTotals(level);
+        bool showTime  = Mod::get()->getSettingValue<bool>("show-time");
+        auto [totalAtt, totalJumps, totalTimeNs] = getTotals(level);
 
-        // Summary-container: totals across linked levels
         auto summary = m_mainLayer->getChildByID("summary-container");
         if (!summary) return;
 
@@ -165,6 +203,12 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
             auto totalJumpsLabel = makeSummaryLabel(fmt::format("Total Jumps: {}", formatCommas(totalJumps)));
             totalJumpsLabel->setID("total-jumps-label"_spr);
             summaryWrapper->addChild(totalJumpsLabel);
+        }
+
+        if (showTime && totalTimeNs) {
+            auto totalTimeLabel = makeSummaryLabel(fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
+            totalTimeLabel->setID("total-time-label"_spr);
+            summaryWrapper->addChild(totalTimeLabel);
         }
 
         summaryWrapper->updateLayout();

@@ -49,6 +49,12 @@
 			"name": "Show Total Jumps",
 			"description": "Also show a Total Jumps label.\n\n<cr>Note:</c> Total jumps for the current level only.",
 			"default": false
+		},
+		"show-time": {
+			"type": "bool",
+			"name": "Show Total Time",
+			"description": "Also show a Total Time label with your total playtime on the level.\n\n<cr>Note:</c> Requires Death Tracker; only counts active playtime (not paused or on the death screen).",
+			"default": true
 		}
 	}
 }
