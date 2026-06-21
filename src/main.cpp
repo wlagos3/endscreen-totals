@@ -2,6 +2,10 @@
 #include <Geode/modify/EndLevelLayer.hpp>
 #include <cvolton.level-id-api/include/EditorIDs.hpp>
 
+#include <sstream>
+#include <algorithm>
+#include <cmath>
+
 using namespace geode::prelude;
 
 static std::string getLevelKey(GJGameLevel* level) {
@@ -47,6 +51,97 @@ static std::optional<matjson::Value> readDTMeta(
 ) {
     auto res = file::readJson(base / key / "metadata");
     return res.isOk() ? std::optional(res.unwrap()) : std::nullopt;
+}
+
+
+// --- Level length estimation (mirrors Death Tracker's timeForLevelString) ---
+// Derives a level's length in seconds by walking its speed portals: each segment
+// between portals is covered at that portal's speed. This is how we convert Death
+// Tracker's percentage histograms into a playtime estimate.
+
+static bool objectIDIsSpeedPortal(int id) {
+    return id == 200 || id == 201 || id == 202 || id == 203 || id == 1334;
+}
+
+static int speedToPortalId(int speed) {
+    switch (speed) {
+        case 1:  return 200;
+        case 2:  return 202;
+        case 3:  return 203;
+        case 4:  return 1334;
+        default: return 201;
+    }
+}
+
+// Units-per-second travelled at each speed portal's speed.
+static float travelForPortalId(int portalId) {
+    switch (portalId) {
+        case 200:  return 251.16008f;
+        case 202:  return 387.42014f;
+        case 203:  return 468.00015f;
+        case 1334: return 576.00018f;
+        default:   return 311.58011f;
+    }
+}
+
+static float timeForLevelString(const std::string& levelString) {
+    struct SpeedPortalObject { int id; float xPos; };
+
+    std::string decompressed = ZipUtils::decompressString(levelString, false, 0);
+    std::stringstream responseStream(decompressed);
+    std::string currentObject;
+    std::vector<SpeedPortalObject> speedPortals;
+
+    float prevPortalX = 0.f;
+    int   prevPortalId = 0;
+    float timeFull = 0.f;
+    float maxPos = 0.f;
+
+    while (std::getline(responseStream, currentObject, ';')) {
+        size_t i = 0;
+        int   objID = 0;
+        float xPos = 0.f;
+        bool  checked = false;
+        std::string currentKey, keyID;
+        std::stringstream objectStream(currentObject);
+        while (std::getline(objectStream, currentKey, ',')) {
+            if (i % 2 == 0) {
+                keyID = currentKey;
+            } else {
+                if (keyID == "1")        objID = geode::utils::numFromString<int>(currentKey).unwrapOr(0);
+                else if (keyID == "2")   xPos  = geode::utils::numFromString<float>(currentKey).unwrapOr(0.f);
+                else if (keyID == "13")  checked = geode::utils::numFromString<int>(currentKey).unwrapOr(0) != 0;
+                else if (keyID == "kA4") prevPortalId = speedToPortalId(geode::utils::numFromString<int>(currentKey).unwrapOr(0));
+            }
+            i++;
+            if (xPos != 0.f && objID != 0 && checked) break;
+        }
+
+        if (maxPos < xPos) maxPos = xPos;
+        if (!checked || !objectIDIsSpeedPortal(objID)) continue;
+        speedPortals.push_back({objID, xPos});
+    }
+
+    std::sort(speedPortals.begin(), speedPortals.end(),
+        [](const SpeedPortalObject& a, const SpeedPortalObject& b) { return a.xPos < b.xPos; });
+
+    for (const auto& portal : speedPortals) {
+        timeFull += (portal.xPos - prevPortalX) / travelForPortalId(prevPortalId);
+        prevPortalId = portal.id;
+        prevPortalX  = portal.xPos;
+    }
+    timeFull += (maxPos - prevPortalX) / travelForPortalId(prevPortalId);
+
+    return timeFull;
+}
+
+// Level length in seconds. We always derive it from the level's geometry rather
+// than m_timestamp: m_timestamp is only set once you've completed the level (and
+// is unreliable), whereas the level string is always available at the endscreen.
+static float levelLengthSeconds(GJGameLevel* level) {
+    if (level->isPlatformer())
+        return 0.f;
+    return std::ceil(timeForLevelString(level->m_levelString));
 }
 
 
@@ -168,10 +263,12 @@ static Totals getTotals(GJGameLevel* level) {
     auto dtBase = dtLevelSaveBase();
     auto key = getLevelKey(level);
 
-    float wtSeconds = level->m_timestamp > 0
-        ? static_cast<float>(level->m_timestamp / 240)
-        : 0.f;
+    // Death Tracker estimates legacy playtime from the *current* level's length,
+    // applying it to all (current + linked) attempts, so derive it once.
+    float wtSeconds = levelLengthSeconds(level);
 
+    // Use Death Tracker's legacy (estimated) playtime, derived from each level's
+    // death/run history scaled by the level length.
     auto levelTimeNs = [&](const std::string& lk) -> uint64_t {
         double seconds = readDTLegacySeconds(*dtBase, lk, wtSeconds);
         return static_cast<uint64_t>(seconds * 1'000'000'000.0);
