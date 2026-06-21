@@ -55,6 +55,12 @@
 			"name": "Show Total Time",
 			"description": "Also show a Total Time label with your total playtime on the level.\n\n<cr>Note:</c> Requires Death Tracker; only counts active playtime (not paused or on the death screen).",
 			"default": true
+		},
+		"replace-stats": {
+			"type": "bool",
+			"name": "Replace Stats With Totals",
+			"description": "Instead of adding new lines, replace the level's Attempts/Jumps/Time labels with your totals (scaled down so the larger numbers fit).",
+			"default": false
 		}
 	}
 }

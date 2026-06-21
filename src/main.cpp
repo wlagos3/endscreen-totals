@@ -135,9 +135,6 @@ static float timeForLevelString(const std::string& levelString) {
     return timeFull;
 }
 
-// Level length in seconds. We always derive it from the level's geometry rather
-// than m_timestamp: m_timestamp is only set once you've completed the level (and
-// is unreliable), whereas the level string is always available at the endscreen.
 static float levelLengthSeconds(GJGameLevel* level) {
     if (level->isPlatformer())
         return 0.f;
@@ -158,9 +155,6 @@ static float runKeyLength(const std::string& key) {
 }
 
 
-// Death Tracker's legacy/estimated playtime (aptgen), in seconds: the full level
-// length (wtSeconds) scaled by how far each attempt got, summed over every death
-// and run in the level's history. Mirrors Death Tracker's calcPlaytime.
 static double readDTLegacySeconds(
     const std::filesystem::path& base,
     const std::string& key,
@@ -263,12 +257,8 @@ static Totals getTotals(GJGameLevel* level) {
     auto dtBase = dtLevelSaveBase();
     auto key = getLevelKey(level);
 
-    // Death Tracker estimates legacy playtime from the *current* level's length,
-    // applying it to all (current + linked) attempts, so derive it once.
     float wtSeconds = levelLengthSeconds(level);
 
-    // Use Death Tracker's legacy (estimated) playtime, derived from each level's
-    // death/run history scaled by the level length.
     auto levelTimeNs = [&](const std::string& lk) -> uint64_t {
         double seconds = readDTLegacySeconds(*dtBase, lk, wtSeconds);
         return static_cast<uint64_t>(seconds * 1'000'000'000.0);
@@ -315,23 +305,52 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
         if (Mod::get()->getSettingValue<bool>("from-zero-only") && pl->m_startPosObject) return;
         if (level->isPlatformer()) return;
 
-        bool showJumps = Mod::get()->getSettingValue<bool>("show-jumps");
-        bool showTime  = Mod::get()->getSettingValue<bool>("show-time");
+        bool showJumps    = Mod::get()->getSettingValue<bool>("show-jumps");
+        bool showTime     = Mod::get()->getSettingValue<bool>("show-time");
+        bool replaceStats = Mod::get()->getSettingValue<bool>("replace-stats");
         auto [totalAtt, totalJumps, totalTimeNs] = getTotals(level);
 
         auto summary = m_mainLayer->getChildByID("summary-container");
         if (!summary) return;
 
-        // Add our totals directly into the native summary container so they share
-        // its centered, auto-scaling ColumnLayout: this keeps them aligned with the
-        // vanilla stat lines and lets the layout shrink everything to fit the box
-        // (no overlap), instead of fighting it with a separate wrapper.
+        if (replaceStats) {
+            // Overwrite the vanilla stat labels in place instead of adding lines.
+            std::vector<CCLabelBMFont*> changed;
+            auto replaceLabel = [&](const char* id, const std::string& text) {
+                if (auto lbl = typeinfo_cast<CCLabelBMFont*>(summary->getChildByID(id))) {
+                    lbl->setString(text.c_str());
+                    changed.push_back(lbl);
+                }
+            };
+
+            replaceLabel("attempts-label", fmt::format("Total Attempts: {}", formatCommas(totalAtt)));
+            if (showJumps)
+                replaceLabel("jumps-label", fmt::format("Total Jumps: {}", formatCommas(totalJumps)));
+            if (showTime && totalTimeNs)
+                replaceLabel("time-label", fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
+
+            // The totals are longer than the vanilla text, so cap the container's
+            // auto-scale to whatever makes the widest line fit the box width. This
+            // shrinks every line uniformly to roughly the size the appended layout
+            // produces, instead of leaving them at the larger vanilla scale.
+            if (auto layout = typeinfo_cast<AxisLayout*>(summary->getLayout())) {
+                float maxWidth = summary->getContentWidth() - 10.f;
+                float scale = 0.8f;
+                for (auto* lbl : changed) {
+                    float w = lbl->getContentSize().width;
+                    if (w > 0.f) scale = std::min(scale, maxWidth / w);
+                }
+                layout->setDefaultScaleLimits(0.25f, scale);
+            }
+
+            summary->updateLayout();
+            return;
+        }
+
         auto makeSummaryLabel = [](const std::string& text) {
             return CCLabelBMFont::create(text.c_str(), "goldFont.fnt");
         };
 
-        // The container lays its children out bottom-to-top, so add in reverse
-        // (Time, Jumps, Attempts) to get Attempts -> Jumps -> Time top-to-bottom.
         if (showTime && totalTimeNs) {
             auto totalTimeLabel = makeSummaryLabel(fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
             totalTimeLabel->setID("total-time-label"_spr);
