@@ -330,9 +330,13 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
             return CCLabelBMFont::create(text.c_str(), "goldFont.fnt");
         };
 
-        auto totalAttLabel = makeSummaryLabel(fmt::format("Total Attempts: {}", formatCommas(totalAtt)));
-        totalAttLabel->setID("total-attempts-label"_spr);
-        summary->addChild(totalAttLabel);
+        // The container lays its children out bottom-to-top, so add in reverse
+        // (Time, Jumps, Attempts) to get Attempts -> Jumps -> Time top-to-bottom.
+        if (showTime && totalTimeNs) {
+            auto totalTimeLabel = makeSummaryLabel(fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
+            totalTimeLabel->setID("total-time-label"_spr);
+            summary->addChild(totalTimeLabel);
+        }
 
         if (showJumps) {
             auto totalJumpsLabel = makeSummaryLabel(fmt::format("Total Jumps: {}", formatCommas(totalJumps)));
@@ -340,11 +344,9 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
             summary->addChild(totalJumpsLabel);
         }
 
-        if (showTime && totalTimeNs) {
-            auto totalTimeLabel = makeSummaryLabel(fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
-            totalTimeLabel->setID("total-time-label"_spr);
-            summary->addChild(totalTimeLabel);
-        }
+        auto totalAttLabel = makeSummaryLabel(fmt::format("Total Attempts: {}", formatCommas(totalAtt)));
+        totalAttLabel->setID("total-attempts-label"_spr);
+        summary->addChild(totalAttLabel);
 
         summary->updateLayout();
     }
