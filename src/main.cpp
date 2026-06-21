@@ -27,7 +27,9 @@ static std::string formatCommas(int n) {
 }
 
 static std::optional<std::filesystem::path> dtLevelSaveBase() {
-    auto dt = Loader::get()->getInstalledMod("elohmrow.death_tracker");
+    // Require Death Tracker to be loaded (enabled), not merely installed. If it's
+    // installed but disabled it isn't recording, so its save files would be stale.
+    auto dt = Loader::get()->getLoadedMod("elohmrow.death_tracker");
     if (!dt) return std::nullopt;
 
     auto settingPath = dt->getSettingValue<std::filesystem::path>("save-path-new");
@@ -208,6 +210,9 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
         if (showTime && totalTimeNs) {
             auto totalTimeLabel = makeSummaryLabel(fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
             totalTimeLabel->setID("total-time-label"_spr);
+            totalTimeLabel->setLayoutOptions(
+                AxisLayoutOptions::create()->setCrossAxisAlignment(AxisAlignment::Center)
+            );
             summaryWrapper->addChild(totalTimeLabel);
         }
 
