@@ -322,46 +322,30 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
         auto summary = m_mainLayer->getChildByID("summary-container");
         if (!summary) return;
 
-        auto summaryWrapper = CCNode::create();
-        summaryWrapper->setID("totals-summary"_spr);
-        summaryWrapper->setAnchorPoint({0.5f, 0.5f});
-        summaryWrapper->setContentSize({160.f, 50.f});
-        auto summaryLayout = ColumnLayout::create();
-        summaryLayout->setAxisReverse(true);
-        summaryLayout->setAxisAlignment(AxisAlignment::Start);
-        summaryLayout->setCrossAxisAlignment(AxisAlignment::Start);
-        summaryLayout->setCrossAxisLineAlignment(AxisAlignment::Start);
-        summaryLayout->setAutoScale(false);
-        summaryLayout->setGap(2.f);
-        summaryWrapper->setLayout(summaryLayout);
-
+        // Add our totals directly into the native summary container so they share
+        // its centered, auto-scaling ColumnLayout: this keeps them aligned with the
+        // vanilla stat lines and lets the layout shrink everything to fit the box
+        // (no overlap), instead of fighting it with a separate wrapper.
         auto makeSummaryLabel = [](const std::string& text) {
-            auto lbl = CCLabelBMFont::create(text.c_str(), "goldFont.fnt");
-            lbl->setScale(0.8f);
-            return lbl;
+            return CCLabelBMFont::create(text.c_str(), "goldFont.fnt");
         };
 
         auto totalAttLabel = makeSummaryLabel(fmt::format("Total Attempts: {}", formatCommas(totalAtt)));
         totalAttLabel->setID("total-attempts-label"_spr);
-        summaryWrapper->addChild(totalAttLabel);
+        summary->addChild(totalAttLabel);
 
         if (showJumps) {
             auto totalJumpsLabel = makeSummaryLabel(fmt::format("Total Jumps: {}", formatCommas(totalJumps)));
             totalJumpsLabel->setID("total-jumps-label"_spr);
-            summaryWrapper->addChild(totalJumpsLabel);
+            summary->addChild(totalJumpsLabel);
         }
 
         if (showTime && totalTimeNs) {
             auto totalTimeLabel = makeSummaryLabel(fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
             totalTimeLabel->setID("total-time-label"_spr);
-            totalTimeLabel->setLayoutOptions(
-                AxisLayoutOptions::create()->setCrossAxisAlignment(AxisAlignment::Center)
-            );
-            summaryWrapper->addChild(totalTimeLabel);
+            summary->addChild(totalTimeLabel);
         }
 
-        summaryWrapper->updateLayout();
-        summary->addChild(summaryWrapper);
         summary->updateLayout();
     }
 };
