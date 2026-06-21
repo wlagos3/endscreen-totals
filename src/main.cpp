@@ -52,17 +52,66 @@ static std::optional<matjson::Value> readDTMeta(
 }
 
 
-static uint64_t readDTPlaytimeNs(
-    const std::filesystem::path& base,
-    const std::string& key
-) {
-    auto res = file::readJson(base / key / "general.dt");
-    if (res.isErr()) return 0;
+// Percentage covered by a Death Tracker run/death key. Keys are either a single
+// death percentage ("42") or a run range ("23-25"). Returns -1 for a bad key.
+static float runKeyLength(const std::string& key) {
+    auto dash = key.find('-');
+    if (dash == std::string::npos) {
+        auto end = geode::utils::numFromString<int>(key);
+        return end.isOk() ? static_cast<float>(end.unwrap()) : -1.f;
+    }
+    auto start = geode::utils::numFromString<int>(key.substr(0, dash));
+    auto end   = geode::utils::numFromString<int>(key.substr(dash + 1));
+    if (start.isErr() || end.isErr()) return -1.f;
+    return static_cast<float>(end.unwrap() - start.unwrap());
+}
 
-    auto general    = res.unwrap()["playtimeGeneral"];
-    uint64_t fromZero = static_cast<uint64_t>(general["playtimeF0"].asInt().unwrapOr(0));
-    uint64_t fromRuns = static_cast<uint64_t>(general["playtimeRuns"].asInt().unwrapOr(0));
-    return fromZero + fromRuns;
+struct DTLevelTime {
+    // Accurate playtime Death Tracker actually measured (ptgen), in nanoseconds.
+    uint64_t accurateNs = 0;
+    // Legacy/estimated playtime (aptgen): seconds estimated from death/run history.
+    double legacySeconds = 0.0;
+};
+
+// Reads both playtime figures from a level's "general.dt". The legacy estimate
+// mirrors Death Tracker's calcPlaytime: full level length (wtSeconds) scaled by
+// how far each attempt got, summed over every death and run.
+static DTLevelTime readDTLevelTime(
+    const std::filesystem::path& base,
+    const std::string& key,
+    float wtSeconds
+) {
+    DTLevelTime out;
+
+    auto res = file::readJson(base / key / "general.dt");
+    if (res.isErr()) return out;
+    auto json = res.unwrap();
+
+    auto general  = json["playtimeGeneral"];
+    out.accurateNs = static_cast<uint64_t>(general["playtimeF0"].asInt().unwrapOr(0))
+                   + static_cast<uint64_t>(general["playtimeRuns"].asInt().unwrapOr(0));
+
+    if (wtSeconds > 0.f) {
+        for (const auto* field : {"deaths", "runs"}) {
+            auto map = json[field];
+            if (!map.isObject()) continue;
+            for (const auto& entry : map) {
+                auto key = entry.getKey();
+                if (!key) continue;
+                int count = static_cast<int>(entry.asInt().unwrapOr(0));
+                if (count <= 0) continue;
+
+                float runLength = runKeyLength(*key);
+                if (runLength < 0.f) continue;
+                if (runLength != 100.f) runLength += 0.5f;
+
+                out.legacySeconds +=
+                    static_cast<double>(wtSeconds) * (runLength / 100.0) * count;
+            }
+        }
+    }
+
+    return out;
 }
 
 
@@ -133,10 +182,22 @@ static Totals getTotals(GJGameLevel* level) {
     int totalJumps = level->m_jumps;
 
     auto dtBase = dtLevelSaveBase();
-
     auto key = getLevelKey(level);
-    std::optional<uint64_t> totalTimeNs;
-    if (dtBase) totalTimeNs = readDTPlaytimeNs(*dtBase, key);
+
+    // Death Tracker estimates legacy playtime from the *current* level's length,
+    // applying it to all (current + linked) attempts, so derive it once. GD levels
+    // run at 240 steps/s, so m_timestamp / 240 is the length in seconds.
+    float wtSeconds = level->m_timestamp > 0
+        ? static_cast<float>(level->m_timestamp / 240)
+        : 0.f;
+
+    uint64_t accurateNs   = 0;
+    double   legacySeconds = 0.0;
+    if (dtBase) {
+        auto t = readDTLevelTime(*dtBase, key, wtSeconds);
+        accurateNs    += t.accurateNs;
+        legacySeconds += t.legacySeconds;
+    }
 
     for (const auto& lk : getLinkedLevels(key, dtBase)) {
         if (auto cached = findLevelInCache(lk)) {
@@ -146,9 +207,18 @@ static Totals getTotals(GJGameLevel* level) {
             if (auto meta = readDTMeta(*dtBase, lk))
                 totalAtt += (*meta)["attempts"].asInt().unwrapOr(0);
         }
-        if (totalTimeNs && lk != key)
-            *totalTimeNs += readDTPlaytimeNs(*dtBase, lk);
+        if (dtBase && lk != key) {
+            auto t = readDTLevelTime(*dtBase, lk, wtSeconds);
+            accurateNs    += t.accurateNs;
+            legacySeconds += t.legacySeconds;
+        }
     }
+
+    // Sum accurate (measured) and legacy (estimated) playtime. These overlap, so
+    // the total intentionally double-counts attempts that have both.
+    std::optional<uint64_t> totalTimeNs;
+    if (dtBase)
+        totalTimeNs = accurateNs + static_cast<uint64_t>(legacySeconds * 1'000'000'000.0);
 
     return {totalAtt, totalJumps, totalTimeNs};
 }
