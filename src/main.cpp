@@ -62,47 +62,40 @@ static float runKeyLength(const std::string& key) {
     return static_cast<float>(end.unwrap() - start.unwrap());
 }
 
-struct DTLevelTime {
-    uint64_t accurateNs = 0;
-    double legacySeconds = 0.0;
-};
 
-static DTLevelTime readDTLevelTime(
+// Death Tracker's legacy/estimated playtime (aptgen), in seconds: the full level
+// length (wtSeconds) scaled by how far each attempt got, summed over every death
+// and run in the level's history. Mirrors Death Tracker's calcPlaytime.
+static double readDTLegacySeconds(
     const std::filesystem::path& base,
     const std::string& key,
     float wtSeconds
 ) {
-    DTLevelTime out;
+    if (wtSeconds <= 0.f) return 0.0;
 
     auto res = file::readJson(base / key / "general.dt");
-    if (res.isErr()) return out;
+    if (res.isErr()) return 0.0;
     auto json = res.unwrap();
 
-    auto general  = json["playtimeGeneral"];
-    out.accurateNs = static_cast<uint64_t>(general["playtimeF0"].asInt().unwrapOr(0))
-                   + static_cast<uint64_t>(general["playtimeRuns"].asInt().unwrapOr(0));
+    double seconds = 0.0;
+    for (const auto* field : {"deaths", "runs"}) {
+        auto map = json[field];
+        if (!map.isObject()) continue;
+        for (const auto& entry : map) {
+            auto entryKey = entry.getKey();
+            if (!entryKey) continue;
+            int count = static_cast<int>(entry.asInt().unwrapOr(0));
+            if (count <= 0) continue;
 
-    if (wtSeconds > 0.f) {
-        for (const auto* field : {"deaths", "runs"}) {
-            auto map = json[field];
-            if (!map.isObject()) continue;
-            for (const auto& entry : map) {
-                auto key = entry.getKey();
-                if (!key) continue;
-                int count = static_cast<int>(entry.asInt().unwrapOr(0));
-                if (count <= 0) continue;
+            float runLength = runKeyLength(*entryKey);
+            if (runLength < 0.f) continue;
+            if (runLength != 100.f) runLength += 0.5f;
 
-                float runLength = runKeyLength(*key);
-                if (runLength < 0.f) continue;
-                if (runLength != 100.f) runLength += 0.5f;
-
-                out.legacySeconds +=
-                    static_cast<double>(wtSeconds) * (runLength / 100.0) * count;
-            }
+            seconds += static_cast<double>(wtSeconds) * (runLength / 100.0) * count;
         }
     }
 
-    return out;
+    return seconds;
 }
 
 
@@ -180,10 +173,8 @@ static Totals getTotals(GJGameLevel* level) {
         : 0.f;
 
     auto levelTimeNs = [&](const std::string& lk) -> uint64_t {
-        auto t = readDTLevelTime(*dtBase, lk, wtSeconds);
-        return t.accurateNs > 0
-            ? t.accurateNs
-            : static_cast<uint64_t>(t.legacySeconds * 1'000'000'000.0);
+        double seconds = readDTLegacySeconds(*dtBase, lk, wtSeconds);
+        return static_cast<uint64_t>(seconds * 1'000'000'000.0);
     };
 
     uint64_t totalNs = 0;
