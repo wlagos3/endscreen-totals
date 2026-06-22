@@ -329,17 +329,23 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
             if (showTime && totalTimeNs)
                 replaceLabel("time-label", fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
 
-            // The totals are longer than the vanilla text, so cap the container's
-            // auto-scale to whatever makes the widest line fit the box width. This
-            // shrinks every line uniformly to roughly the size the appended layout
-            // produces, instead of leaving them at the larger vanilla scale.
-            if (auto layout = typeinfo_cast<AxisLayout*>(summary->getLayout())) {
-                float maxWidth = summary->getContentWidth() - 10.f;
-                float scale = 0.8f;
-                for (auto* lbl : changed) {
-                    float w = lbl->getContentSize().width;
-                    if (w > 0.f) scale = std::min(scale, maxWidth / w);
-                }
+            // Match the size the appended layout produces. Append mode fits every
+            // existing stat line PLUS the extra total lines into the box, so its
+            // text is sized for that larger line count. Replace mode reuses the
+            // existing lines, so scale the container as if those extra lines were
+            // still there, fitting them into the box height.
+            if (auto layout = typeinfo_cast<AxisLayout*>(summary->getLayout()); layout && !changed.empty()) {
+                int existingLines = 0;
+                for (auto* child : CCArrayExt<CCNode*>(summary->getChildren()))
+                    if (typeinfo_cast<CCLabelBMFont*>(child)) existingLines++;
+                int appendLines = 1 + (showJumps ? 1 : 0) + ((showTime && totalTimeNs) ? 1 : 0);
+                int lines = existingLines + appendLines;
+
+                float lineH = changed.front()->getContentSize().height;
+                float gap   = 3.f;
+                float needed = lines * lineH + (lines - 1) * gap;
+                float avail  = summary->getContentHeight();
+                float scale  = std::clamp(needed > 0.f ? avail / needed : 0.8f, 0.25f, 0.8f);
                 layout->setDefaultScaleLimits(0.25f, scale);
             }
 
