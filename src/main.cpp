@@ -315,12 +315,9 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
 
         if (replaceStats) {
             // Overwrite the vanilla stat labels in place instead of adding lines.
-            std::vector<CCLabelBMFont*> changed;
             auto replaceLabel = [&](const char* id, const std::string& text) {
-                if (auto lbl = typeinfo_cast<CCLabelBMFont*>(summary->getChildByID(id))) {
+                if (auto lbl = typeinfo_cast<CCLabelBMFont*>(summary->getChildByID(id)))
                     lbl->setString(text.c_str());
-                    changed.push_back(lbl);
-                }
             };
 
             replaceLabel("attempts-label", fmt::format("Total Attempts: {}", formatCommas(totalAtt)));
@@ -329,26 +326,9 @@ class $modify(MyEndLevelLayer, EndLevelLayer) {
             if (showTime && totalTimeNs)
                 replaceLabel("time-label", fmt::format("Total Time: {}", formatTime(*totalTimeNs)));
 
-            // Match the size the appended layout produces. Append mode fits every
-            // existing stat line PLUS the extra total lines into the box, so its
-            // text is sized for that larger line count. Replace mode reuses the
-            // existing lines, so scale the container as if those extra lines were
-            // still there, fitting them into the box height.
-            if (auto layout = typeinfo_cast<AxisLayout*>(summary->getLayout()); layout && !changed.empty()) {
-                int existingLines = 0;
-                for (auto* child : CCArrayExt<CCNode*>(summary->getChildren()))
-                    if (typeinfo_cast<CCLabelBMFont*>(child)) existingLines++;
-                int appendLines = 1 + (showJumps ? 1 : 0) + ((showTime && totalTimeNs) ? 1 : 0);
-                int lines = existingLines + appendLines;
-
-                float lineH = changed.front()->getContentSize().height;
-                float gap   = 3.f;
-                float needed = lines * lineH + (lines - 1) * gap;
-                float avail  = summary->getContentHeight();
-                float scale  = std::clamp(needed > 0.f ? avail / needed : 0.8f, 0.25f, 0.8f);
-                layout->setDefaultScaleLimits(0.25f, scale);
-            }
-
+            // Let the container's native auto-scale (0.25-0.8) size the labels to the
+            // actual line count. The longer total text is allowed to spill past the
+            // 200px container onto the endscreen, just like the appended labels do.
             summary->updateLayout();
             return;
         }
